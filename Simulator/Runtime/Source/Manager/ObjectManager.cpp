@@ -23,7 +23,7 @@ namespace VT_Physics {
         std::vector<Object *> ret;
         auto &objectsConfig = allConfiguration["OBJECTS"];
         if (objectsConfig.empty()) {
-            LOG_ERROR("ObjectManager::createObjectsFromJson: objectsConfig is empty")
+            LOG_ERROR("ObjectManager::createObjectsFromJson: objectsConfig is empty");
             return {};
         }
 
@@ -33,6 +33,8 @@ namespace VT_Physics {
             auto &config = obj->getObjectComponentConfig();
             config = objConfigJson["ObjectComponentConfig"];
             obj->attachSpecificSolverObjectComponentConfig(objConfigJson["SolverObjectComponentConfig"]);
+            if(objConfigJson.contains("name"))
+                obj->rename(objConfigJson["name"].get<std::string>());
             obj->update();
             ret.push_back(obj);
         }

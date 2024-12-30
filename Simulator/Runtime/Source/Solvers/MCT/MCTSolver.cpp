@@ -558,8 +558,10 @@ namespace VT_Physics::mct {
                                    data_size * sizeof(float3),
                                    cudaMemcpyDeviceToHost);
                         auto exportConfig_tmp = exportConfig;
-                        exportConfig_tmp["Common"]["exportTargetDir"] += "/" + m_attached_objs[i]->getName();
-                        exportConfig_tmp["Common"]["exportFilePrefix"] += std::to_string(m_outputFrameCount);
+                        exportConfig_tmp["Common"]["exportTargetDir"] =
+                                exportConfig_tmp["Common"]["exportTargetDir"].get<std::string>() + "/" +
+                                m_attached_objs[i]->getName();
+                        exportConfig_tmp["Common"]["exportFilePrefix"] = std::to_string(m_outputFrameCount);
                         ExportUtil::exportData(exportConfig_tmp,
                                                pos_tmp,
                                                color_tmp);

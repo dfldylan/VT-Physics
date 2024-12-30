@@ -2,6 +2,7 @@
 
 #include <set>
 #include <string>
+#include <chrono>
 
 using namespace VT_Physics;
 
@@ -86,10 +87,15 @@ int main(int argc, char *argv[]) {
     /**
      * Run simulation ==============================================================================
      */
+    LOG_INFO("Start simulation...");
+    auto start_time = std::chrono::high_resolution_clock::now();
     if (rns_stepNums == 0)
         cur_solver->run();
     else
         cur_solver->tickNsteps(rns_stepNums);
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto time_cost = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count() / 1000.0;
+    LOG_INFO("Simulation finished in " + std::to_string(time_cost) + " seconds.");
 
     /**
      * Terminate simulator ========================================================================
