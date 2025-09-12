@@ -36,6 +36,19 @@
  *    Thanks to Linh Hah for additions and fixes.
  */
 
+#pragma once
+
+// 先注入 CUDA 兼容空宏，保证 __host__/__device__/__align__ 等在 MSVC 下可解析
+#include "Core/Math/cuda_compat.h"
+
+// 防止 Windows 头定义的 min/max 宏污染本文件内联函数声明
+#ifdef min
+#undef min
+#endif
+#ifdef max
+#undef max
+#endif
+
 #ifndef HELPER_MATH_H
 #define HELPER_MATH_H
 

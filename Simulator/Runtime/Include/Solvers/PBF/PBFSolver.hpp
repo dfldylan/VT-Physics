@@ -13,6 +13,18 @@
 #include "PBFrtData.hpp"
 #include "Modules/NeighborSearch/UGNS/UniformGridNeighborSearch.hpp"
 
+// 移除对 CUDA 头的直接依赖，避免服务器侧 MSVC 解析 helper_math
+// #include "PBFCudaApi.cuh"
+
+// 为非 CUDA 编译提供 float3 等最小类型
+#include "Core/Math/cuda_vector_compat.h"
+
+// 如需用到 __host__/__device__ 等，也可包含上一轮加的空宏头
+#include "Core/Math/cuda_compat.h"
+
+// 在命名空间内前置声明 CUDA Data（在 .cpp 中完整定义）
+namespace VT_Physics { namespace pbf { struct Data; } }
+
 namespace VT_Physics::pbf {
 
     inline const std::vector<std::string> PBFConfigRequiredKeys = {
@@ -74,6 +86,11 @@ namespace VT_Physics::pbf {
         virtual bool reset() override;
 
         virtual void destroy() override;
+
+        // --- Lightweight read-back APIs for service ---
+        void fetchAllParticles(std::vector<float3>& outPos, std::vector<float3>& outVel);
+        void getAttachedObjectRanges(std::vector<int>& start, std::vector<int>& end);
+        void setTimeStep(float dt);
 
     protected:
         virtual bool tick() override;

@@ -67,3 +67,92 @@ We provide simple examples associated with each physical solver. You can run the
 test the solver. The examples are located in the `VT-Physics/Examples` directory.
 
 For each solver, we provide a `README.md` file to introduce the solver and its usage, which you can find in the "VT-Physics/Simulator/Runtime/Include/Solvers" directory.
+
+---
+
+## 3. PBF Network Service (vp_pbf_server)
+
+A lightweight TCP service process used to send/receive point clouds and control commands over the network, driving the PBF solver to advance frame by frame and returning particle data.
+
+- Executable target: `vp_pbf_server` (built from `Simulator/CommandLineTool/PBFServer.cpp`)
+- Dependencies: links against `vpmanager`; on Windows additionally links `Ws2_32`
+- Default port: `55001`
+- Run: `vp_pbf_server [port]`
+- Connection model: single client, blocking I/O (after accepting one client it enters the loop)
+
+### 3.1 Binary Protocol Overview
+
+- Endianness: little-endian
+- Every message starts with a 4‑byte signed int `type`, followed by the payload
+- Basic scalar types: `int32`, `float32`
+- Floating point arrays are contiguous flat `float32` arrays
+
+Message types and payload / response:
+
+1. Reset scene  
+   - Request: `[int32 type=1][float particleRadius]`  
+   - Action: clear all objects and solver, rebuild the PBF solver and update particle radius (other config uses a default template)  
+   - Response: `[int32 ok]` (1 = success, 0 = failure)
+
+1. Add Fluid point cloud  
+   - Request: `[int32 type=2][int32 id][int32 N][float pos[N*3]][float vel[N*3]]`  
+     - Current implementation ignores per‑particle velocity; all initial velocities set to 0  
+   - Action: create `Particle_Common` with material FLUID, inject `pos` as particles, attach to PBF  
+   - Response: `[int32 ok]`
+
+1. Add Solid point cloud  
+   - Request: `[int32 type=3][int32 id][int32 B][float pos[B*3]][float normal[B*3]]`  
+     - `normal` is currently unused (reserved for future rigid/body boundary behavior)  
+   - Action: create `Particle_Common` with material BOUNDARY; inject point cloud; attach to PBF  
+   - Response: `[int32 ok]`
+
+1. Next frame  
+   - Request: `[int32 type=4][float dt]`  
+     - If `dt > 0`, update PBF time step via a lightweight API (without resetting full config)  
+   - Action: initialize solver lazily on first call; then advance one tick  
+   - Response:  
+     - Header: `[int32 ok=1][int32 objCount]`  
+     - Per object (in the same order as attached), repeated `objCount` times:  
+       - `[int32 id][int32 N][float pos[N*3]][float vel[N*3]]`  
+       - `N` is particle count for that object (sliced via recorded start/end)
+
+1. Clear all objects  
+   - Request: `[int32 type=5]`  
+   - Action: clear objects and solver; service keeps listening  
+   - Response: `[int32 ok]`
+
+1. Shutdown service  
+   - Request: `[int32 type=9]`  
+   - Action: close current connection and exit process  
+   - Response: none (server closes socket)
+
+### 3.2 Mapping Between Particles and Objects
+
+- On every `attachObject`, the server records that object's `[start, end)` span inside the global particle array
+- During a `Next frame` response, slices `pos/vel` for each object (in attachment order) and returns them
+
+### 3.3 Key Implementation Details (for Integration / Extension)
+
+- Direct raw point injection: `ParticleGeometryComponent::update` supports config key `__rawPoints__` (flat `std::vector<float>`), avoiding PLY files
+- Lightweight data read-back added to `PBFSolver`:
+  - `fetchAllParticles(std::vector<float3>& pos, std::vector<float3>& vel)`
+  - `getAttachedObjectRanges(std::vector<int>& start, std::vector<int>& end)`
+  - `setTimeStep(float dt)`
+- Current limitations:
+  - Single client, blocking I/O; no length-prefixed framing (relies on strict sender adherence)
+  - Solid `normal` unused; `UpdateSolidTransform` message planned (apply transform and refresh GPU buffers before each tick)
+
+### 3.4 Minimal Client Integration Notes
+
+- Write `int32/float32` in little-endian
+- Send a full message before sending the next to avoid interleaving (no custom framing)
+- For `Next frame` response: first read `ok` and `objCount`, then iteratively read each object block
+
+### 3.5 Planned (Not Yet Implemented)
+
+- `UpdateSolidTransform` message (draft):
+  - Request: `[int32 type=6][int32 id][float quat[4]][float trans[3]]`
+  - Action: apply rigid transform to that solid's particle `pos` (and normals if used) on CUDA side before `tick`
+  - Response: `[int32 ok]`
+- Per-particle initial velocity upload for fluids
+- Multi-client support / non-blocking I/O / heartbeat & timeout handling

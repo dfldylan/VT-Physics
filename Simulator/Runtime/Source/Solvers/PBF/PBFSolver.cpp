@@ -323,6 +323,15 @@ namespace VT_Physics::pbf {
         }
     }
 
+    void PBFSolver::setTimeStep(float dt) {
+        if (dt <= 0) return;
+        m_host_data->dt = dt;
+        m_host_data->inv_dt = 1.f / dt;
+        m_host_data->inv_dt2 = m_host_data->inv_dt * m_host_data->inv_dt;
+        // keep json consistent for potential users
+        m_configData["PBF"]["Required"]["timeStep"] = dt;
+    }
+
     bool PBFSolver::tick() {
         static const float export_gap = 1 / m_configData["EXPORT"]["SolverRequired"]["exportFps"].get<float>();
 
@@ -402,6 +411,34 @@ namespace VT_Physics::pbf {
         }
 
         return true;
+    }
+
+    // ------------------- Lightweight read-back APIs for service -------------------
+    void PBFSolver::fetchAllParticles(std::vector<float3>& outPos, std::vector<float3>& outVel) {
+        outPos.resize(m_host_data->particle_num);
+        outVel.resize(m_host_data->particle_num);
+        if (m_host_data->particle_num == 0) return;
+        cudaMemcpy(outPos.data(), m_host_data->pos, m_host_data->particle_num * sizeof(float3), cudaMemcpyDeviceToHost);
+        cudaMemcpy(outVel.data(), m_host_data->vel, m_host_data->particle_num * sizeof(float3), cudaMemcpyDeviceToHost);
+    }
+
+    void PBFSolver::getAttachedObjectRanges(std::vector<int>& start, std::vector<int>& end) {
+        start.clear(); end.clear();
+        if (!m_configData.contains("EXPORT") || !m_configData["EXPORT"].contains("SolverRequired")) return;
+        auto &sr = m_configData["EXPORT"]["SolverRequired"];
+        if (sr.contains("exportObjectStartIndex")) {
+            for (auto &v : sr["exportObjectStartIndex"]) start.push_back(v.get<int>());
+        }
+        if (sr.contains("exportObjectEndIndex")) {
+            for (auto &v : sr["exportObjectEndIndex"]) end.push_back(v.get<int>());
+        }
+        // Fallback build end if missing
+        if (!start.empty() && end.size() != start.size()) {
+            end.resize(start.size());
+            for (size_t i=0;i<start.size();++i) {
+                if (i+1<start.size()) end[i] = start[i+1]; else end[i] = (int)m_host_data->particle_num;
+            }
+        }
     }
 
 }

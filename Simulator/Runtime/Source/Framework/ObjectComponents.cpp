@@ -22,10 +22,16 @@ namespace VT_Physics {
     std::vector<float> ObjectTypeComponent::getElements() { return {}; }
     // ====================================================================================
 
+    // 旧的 FILL_CLONE 使用 memcpy_s，会破坏 std::vector 内部结构
+//#define FILL_CLONE(type) \
+//auto ret = new type();\
+//    memcpy_s(ret, sizeof(type), \
+//    this, sizeof(type)); \
+//    return static_cast<ObjectTypeComponent *>(ret);
+
+// 安全版本：调用拷贝构造（必要时为含裸资源的类型单独实现拷贝构造）
 #define FILL_CLONE(type) \
-auto ret = new type();\
-    memcpy_s(ret, sizeof(type), \
-    this, sizeof(type)); \
+    auto ret = new type(*this); \
     return static_cast<ObjectTypeComponent *>(ret);
 
     /**
@@ -249,6 +255,13 @@ auto ret = new type();\
             if (config.contains("epmMaterial"))
                 epmMaterial = config["epmMaterial"];
             particleRadius = config["particleRadius"];
+            // accept raw points directly if provided
+            if (config.contains("__rawPoints__")) {
+                std::vector<float> raw = config["__rawPoints__"].get<std::vector<float>>();
+                pos = make_cuFloat3Vec(raw);
+                LOG_INFO("ParticleGeometryComponent loaded from raw points, count: " + std::to_string(pos.size()));
+                return;
+            }
             particleGeometryPath = config["particleGeometryPath"];
             auto p = ModelHandler::generateObjectElements(config);
             pos = p;

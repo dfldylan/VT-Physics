@@ -25,15 +25,19 @@ SET(VP_BIN_ROOT ${VP_SOURCE_ROOT}/Bin)
 
 SET(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${VP_BIN_ROOT})
 
-FIND_PACKAGE(OpenMP REQUIRED)
-IF (OpenMP_CXX_FOUND)
-    ADD_DEFINITIONS(-DVP_TURN_ON_OMP)
-    IF (MSVC)
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /openmp")
-    ELSE ()
-        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    ENDIF ()
-ENDIF ()
+# 不在 MSVC+NVCC 上请求 OpenMP 的 CUDA 组件，默认仅启用 CXX
+option(VP_ENABLE_OPENMP_CUDA "Enable OpenMP offload for CUDA (needs Clang/GCC toolchain, not MSVC+NVCC)" OFF)
+
+if (VP_ENABLE_OPENMP_CUDA)
+    find_package(OpenMP REQUIRED COMPONENTS CXX CUDA)
+else()
+    find_package(OpenMP REQUIRED COMPONENTS CXX)
+endif()
+
+# 如果工程里有地方链接了 OpenMP::OpenMP_CUDA，这里做个空目标兜底，避免链接阶段报错
+if (NOT TARGET OpenMP::OpenMP_CUDA)
+    add_library(OpenMP::OpenMP_CUDA INTERFACE IMPORTED)
+endif()
 
 #===================================== Build Components.
 ADD_SUBDIRECTORY(Simulator)
