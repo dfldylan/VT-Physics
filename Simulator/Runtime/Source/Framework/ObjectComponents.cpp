@@ -1,6 +1,7 @@
 #include "Framework/ObjectComponents.hpp"
 
 #include "Core/Math/DataStructTransfer.hpp"
+#include <string.h>
 
 namespace VT_Physics {
 
@@ -106,12 +107,20 @@ namespace VT_Physics {
                 cudaMemcpy(templateEPM, epm.data(), templateParticleNum * sizeof(int), cudaMemcpyHostToDevice);
             } else {
                 templatePos = new float3[templateParticleNum];
+#ifdef _MSC_VER
                 memcpy_s(templatePos, templateParticleNum * sizeof(float3), agent_pos.data(),
                          templateParticleNum * sizeof(float3));
+#else
+                memcpy(templatePos, agent_pos.data(), templateParticleNum * sizeof(float3));
+#endif
 
                 templateEPM = new int[templateParticleNum];
+#ifdef _MSC_VER
                 memcpy_s(templateEPM, templateParticleNum * sizeof(int), epm.data(),
                          templateParticleNum * sizeof(int));
+#else
+                memcpy(templateEPM, epm.data(), templateParticleNum * sizeof(int));
+#endif
             }
 
             pos = std::vector<float3>(emitParticleMaxNum, {0, 0, 0});
@@ -144,14 +153,22 @@ namespace VT_Physics {
         } else {
             if (!attachedPosBuffers.empty()) {
                 for (auto buffer: attachedPosBuffers)
+#ifdef _MSC_VER
                     memcpy_s(buffer + bufferInsertOffset, templateParticleNum * sizeof(float3),
                              templatePos, templateParticleNum * sizeof(float3));
+#else
+                    memcpy(buffer + bufferInsertOffset, templatePos, templateParticleNum * sizeof(float3));
+#endif
             }
 
             if (!attachedEPMBuffers.empty()) {
                 for (auto buffer: attachedEPMBuffers)
+#ifdef _MSC_VER
                     memcpy_s(buffer + bufferInsertOffset, templateParticleNum * sizeof(int),
                              templateEPM, templateParticleNum * sizeof(int));
+#else
+                    memcpy(buffer + bufferInsertOffset, templateEPM, templateParticleNum * sizeof(int));
+#endif
             }
         }
 

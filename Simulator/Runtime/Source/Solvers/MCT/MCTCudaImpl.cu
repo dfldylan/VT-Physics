@@ -1020,8 +1020,7 @@ namespace VT_Physics::mct {
         if (DATA_VALUE(mat, p_i) != EPM_PCR_FAN)
             return;
 
-        const float M_PI = 3.1415926;
-        float angleRadians = 0.008f * (M_PI / 180.0f);// 将角度转换为弧度
+        float angleRadians = 0.008f * (3.1415926 / 180.0f);// 将角度转换为弧度
         float cosAngle = cos(angleRadians);
         float sinAngle = sin(angleRadians);
 

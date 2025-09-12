@@ -5,7 +5,7 @@ git submodule init
 git submodule update
 
 # Set vcpkg installation path
-VCPKG_PATH="$(dirname "$0")/Simulator/Thirdparty/vcpkg"
+VCPKG_PATH="$(dirname "$0")/Simulator/ThirdParty/vcpkg"
 
 # Set dependencies file path
 DEPENDENCIES_FILE="dependencies.txt"

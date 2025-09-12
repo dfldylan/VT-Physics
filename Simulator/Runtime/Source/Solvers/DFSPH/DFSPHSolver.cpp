@@ -1,6 +1,7 @@
 #include "Solvers/DFSPH/DFSPHSolver.hpp"
 
 #include <string>
+#include <cmath>
 
 #include "Logger/Logger.hpp"
 #include "Model/ExportUtil.hpp"
@@ -47,7 +48,7 @@ namespace VT_Physics::dfsph {
         m_host_data->particle_radius = dfsph_config["Required"]["particleRadius"].get<float>();
         m_host_data->fPart_rest_density = dfsph_config["Required"]["fPartRestDensity"].get<float>();
         m_host_data->bPart_rest_density = dfsph_config["Required"]["bPartRestDensity"].get<float>();
-        m_host_data->fPart_rest_volume = std::powf(2 * m_host_data->particle_radius, 3);
+        m_host_data->fPart_rest_volume = std::pow(2 * m_host_data->particle_radius, 3);
         m_host_data->h = m_host_data->particle_radius * 4;
         m_host_data->fPart_rest_viscosity = dfsph_config["Required"]["fPartRestViscosity"].get<float>();
         m_host_data->div_free_threshold = dfsph_config["Required"]["divFreeThreshold"].get<float>();

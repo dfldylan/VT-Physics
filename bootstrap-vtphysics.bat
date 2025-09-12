@@ -6,7 +6,7 @@ git submodule init
 git submodule update
 
 REM 设置 vcpkg 的安装路径
-set VCPKG_PATH=%~dp0\Simulator\Thirdparty\vcpkg
+set VCPKG_PATH=%~dp0\Simulator\ThirdParty\vcpkg
 
 REM 设置依赖库文件路径
 set DEPENDENCIES_FILE=dependencies.txt

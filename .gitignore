@@ -26,3 +26,5 @@ ConfigTemplates/RealPath.h
 
 # bin
 Bin
+
+.DS_Store

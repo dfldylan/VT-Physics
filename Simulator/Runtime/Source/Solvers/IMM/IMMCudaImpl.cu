@@ -9,7 +9,7 @@ namespace VT_Physics::imm {
     uint32_t i = blockIdx.x * blockDim.x + threadIdx.x; \
     if (i >= d_data->particle_num)                     \
         return;                                         \
-    auto p_i = d_nsParams->particleIndices_cuData[i];
+    auto p_i = d_nsParams->particleIndices_cuData[i]
 
 #define FOR_EACH_NEIGHBOR_Pj() \
        auto neib_ind = p_i * d_nsConfig->maxNeighborNum;                        \
@@ -683,8 +683,7 @@ namespace VT_Physics::imm {
         if (DATA_VALUE(mat, p_i) != EPM_PCR_FAN)
             return;
 
-        const float M_PI = 3.1415926;
-        float angleRadians = 0.002f * (M_PI / 180.0f);// 将角度转换为弧度
+        float angleRadians = 0.002f * (3.1415926f / 180.0f);
         float cosAngle = cos(angleRadians);
         float sinAngle = sin(angleRadians);
 

@@ -54,10 +54,29 @@ cd VT-Physics
 
 Finally, build the project with CMake:
 
+**For Windows (with Visual Studio):**
 ```shell
 cd VT-Physics
 cmake -B build -S . -G "Visual Studio 16 2019"  # for CUDA 11.6+
+# or
 cmake -B build -S . -G "Visual Studio 17 2022"  # for CUDA 12.6+
+
+# Build the project
+cmake --build build --config Debug
+```
+
+**For Linux:**
+
+First, ensure you have the necessary build tools installed. For Debian/Ubuntu based systems:
+```shell
+sudo apt update
+sudo apt install build-essential curl zip unzip tar
+```
+
+Then, configure and build the project:
+```shell
+cd VT-Physics
+cmake -B build -S .
 cmake --build build --config Debug
 ```
 

@@ -14,10 +14,9 @@
 #define WIN32_LEAN_AND_MEAN
 #endif
 
+#ifdef _WIN32
 // 确保 winsock2 在 windows.h 之前被包含（如已有包含也无妨）
 #include <winsock2.h>
-
-#ifdef _WIN32
 #pragma comment(lib, "Ws2_32.lib")
 #else
 #include <sys/socket.h>

@@ -1,6 +1,7 @@
 #include "Solvers/IMM/IMMSolver.hpp"
 
 #include <string>
+#include <cmath>
 
 #include "Logger/Logger.hpp"
 #include "Model/ExportUtil.hpp"
@@ -46,7 +47,7 @@ namespace VT_Physics::imm {
         m_host_data->inv_dt2 = m_host_data->inv_dt * m_host_data->inv_dt;
         m_host_data->cur_simTime = 0.f;
         m_host_data->particle_radius = imm_config["Required"]["particleRadius"].get<float>();
-        m_host_data->fPart_rest_volume = std::powf(2 * m_host_data->particle_radius, 3);
+        m_host_data->fPart_rest_volume = std::pow(2 * m_host_data->particle_radius, 3);
         m_host_data->h = m_host_data->particle_radius * 4;
         m_host_data->div_free_threshold = imm_config["Required"]["divFreeThreshold"].get<float>();
         m_host_data->incomp_threshold = imm_config["Required"]["incompThreshold"].get<float>();
