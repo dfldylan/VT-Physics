@@ -28,3 +28,5 @@ ConfigTemplates/RealPath.h
 Bin
 
 .DS_Store
+.vscode
+simulation_output

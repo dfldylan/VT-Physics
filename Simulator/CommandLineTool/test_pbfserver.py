@@ -171,8 +171,9 @@ end_header
 
 def main():
     # --- Configuration ---
-    SERVER_PORT = 45001 # 确保这个端口和你的服务器配置一致
-    PARTICLE_RADIUS = 0.1
+    SERVER_HOST = '222.199.197.89'
+    SERVER_PORT = 31364 # 确保这个端口和你的服务器配置一致
+    PARTICLE_RADIUS = 0.05
     PARTICLE_DISTANCE = PARTICLE_RADIUS * 2.0
     
     SIMULATION_STEPS = 200
@@ -182,7 +183,7 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # --- Create Client and Connect ---
-    client = PBFClient(port=SERVER_PORT)
+    client = PBFClient(host=SERVER_HOST,port=SERVER_PORT)
     if not client.connect():
         return
 
@@ -196,6 +197,8 @@ def main():
 
         solid_pos, solid_nrm = create_solid_plane(center=np.array([0, -1, 0]), size=8.0, particle_dist=PARTICLE_DISTANCE)
         client.add_solid(obj_id=201, positions=solid_pos, normals=solid_nrm)
+        # Save solid object once
+        save_ply(os.path.join(OUTPUT_DIR, "solid_plane.ply"), solid_pos)
 
         # 3. Run simulation loop
         print("\n--- Starting simulation loop ---")
@@ -224,7 +227,6 @@ def main():
         print(f"\nAn error occurred: {e}")
     finally:
         # 5. Shutdown the server and close the client
-        client.shutdown()
         client.close()
 
 if __name__ == "__main__":
