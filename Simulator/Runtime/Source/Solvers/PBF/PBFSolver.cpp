@@ -8,6 +8,8 @@
 #include "JSON/JSONHandler.hpp"
 #include "PBFCudaApi.cuh"
 
+void compute_max_velocity_sq(VT_Physics::pbf::Data* data, float* max_vel_sq_out);
+
 namespace VT_Physics::pbf {
 
     PBFSolver::PBFSolver(uint32_t cudaThreadSize) {
@@ -20,6 +22,7 @@ namespace VT_Physics::pbf {
             delete m_host_data;
             return;
         }
+        cudaMalloc((void**)&m_d_max_vel_sq, sizeof(float)); // 分配内存
 
         LOG_INFO("PBFSolver Created.");
     }
@@ -56,6 +59,13 @@ namespace VT_Physics::pbf {
         if (pbf_config["Optional"]["enable"]) {
             auto g = pbf_config["Optional"]["gravity"].get<std::vector<float>>();
             m_host_data->gravity = make_float3(g[0], g[1], g[2]);
+        }
+
+        if (pbf_config["Optional"].contains("enableCFL")) {
+            m_enableCFL = pbf_config["Optional"]["enableCFL"].get<bool>();
+            if (m_enableCFL) {
+                LOG_INFO("CFL condition enabled.");
+            }
         }
 
         LOG_INFO("PBFSolver Configured.");
@@ -240,6 +250,10 @@ namespace VT_Physics::pbf {
         m_host_data->free();
         delete m_host_data;
         cudaFree(m_device_data);
+        if (m_d_max_vel_sq) { // 释放内存
+            cudaFree(m_d_max_vel_sq);
+            m_d_max_vel_sq = nullptr;
+        }
         m_attached_objs.clear();
         m_neighborSearcher.freeMemory();
 
@@ -334,6 +348,28 @@ namespace VT_Physics::pbf {
     }
 
     bool PBFSolver::tick() {
+        // 如果启用了CFL，在tick开始时动态计算并更新dt
+        if (m_enableCFL) {
+            // 1. 计算最大速度平方
+            compute_max_velocity_sq(m_host_data, m_d_max_vel_sq);
+
+            // 2. 将结果从GPU拷贝回CPU
+            float h_max_vel_sq = 0.0f;
+            cudaMemcpy(&h_max_vel_sq, m_d_max_vel_sq, sizeof(float), cudaMemcpyDeviceToHost);
+
+            // 3. 计算新的dt
+            float new_dt = m_host_data->dt;
+            if (h_max_vel_sq > 1e-9) { // 避免除以零
+                float max_vel = std::sqrt(h_max_vel_sq);
+                new_dt = m_cfl_number * (m_host_data->particle_radius * 2.0f) / max_vel; // 使用直径作为特征长度更稳定
+            }
+
+            // 4. 限制dt在合理范围内并更新
+            new_dt = std::max(m_min_dt, std::min(m_max_dt, new_dt));
+            setTimeStep(new_dt);
+            LOG_INFO("PBFSolver adjusted dt to: " + std::to_string(new_dt) + " based on CFL condition.");
+        }
+
         static const float export_gap = 1 / m_configData["EXPORT"]["SolverRequired"]["exportFps"].get<float>();
 
         apply_ext_force(m_host_data,

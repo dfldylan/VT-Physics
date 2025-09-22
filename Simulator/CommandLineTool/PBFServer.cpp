@@ -193,6 +193,7 @@ namespace {
             pbf_config["PBF"]["Required"]["XSPH_k"] = 0.01;
             pbf_config["PBF"]["Required"]["fPartRestDensity"] = 1000.f;
             pbf_config["PBF"]["Required"]["bPartRestDensity"] = 1500.f;
+            pbf_config["PBF"]["Optional"]["enableCFL"] = true;
             pbf_config["EXPORT"]["Common"]["exportTargetDir"] = ".\\VP-Examples\\PBF";
             pbf_config["EXPORT"]["SolverRequired"]["enable"] = true;
             pbf_config["EXPORT"]["SolverRequired"]["exportFps"] = 35;
@@ -313,7 +314,7 @@ namespace {
             }
 
             // log
-            LOG_INFO("Frame done. dt=" + std::to_string(dt) + ", objects=" + std::to_string(objCount) + ", particles=" + std::to_string(allPos.size()));
+            LOG_INFO("Frame done. objects=" + std::to_string(objCount) + ", particles=" + std::to_string(allPos.size()));
         }
 
         void onClear(SOCKET s) {

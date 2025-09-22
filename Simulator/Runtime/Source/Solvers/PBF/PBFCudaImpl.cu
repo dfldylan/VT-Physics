@@ -192,6 +192,50 @@ namespace VT_Physics::pbf { // cuda kernels
 
         DATA_VALUE(dx, p_i) += dv * CONST_VALUE(dt);
     }
+
+    // 添加这个辅助函数
+    __device__ static inline void atomicMax_f(float* address, float val) {
+        int* address_as_int = (int*)address;
+        int old = *address_as_int, assumed;
+        do {
+            assumed = old;
+            old = atomicCAS(address_as_int, assumed, __float_as_int(fmaxf(val, __int_as_float(assumed))));
+        } while (assumed != old);
+    }
+
+    __global__ void reduce_max_velocity_sq_kernel_part1(const float3* vel, float* partial_max_sq, int n) {
+        int idx = blockIdx.x * blockDim.x + threadIdx.x;
+        if (idx >= n) return;
+
+        float vel_sq = vel[idx].x * vel[idx].x + vel[idx].y * vel[idx].y + vel[idx].z * vel[idx].z;
+        // 使用我们自己实现的 atomicMax_f
+        atomicMax_f(&partial_max_sq[blockIdx.x], vel_sq);
+    }
+
+    __global__ void reduce_max_velocity_sq_kernel_part2(float* partial_max_sq, float* final_max_sq, int num_blocks) {
+        if (threadIdx.x == 0 && blockIdx.x == 0) {
+            float max_val = 0.0f;
+            for (int i = 0; i < num_blocks; ++i) {
+                max_val = fmaxf(max_val, partial_max_sq[i]);
+            }
+            *final_max_sq = max_val;
+        }
+    }
+
+    void compute_max_velocity_sq(Data* data, float* d_max_vel_sq_out) {
+        // 临时存储每个 block 的最大值
+        float* d_partial_max_sq;
+        cudaMalloc(&d_partial_max_sq, data->block_num * sizeof(float));
+        cudaMemset(d_partial_max_sq, 0, data->block_num * sizeof(float));
+
+        // 第一阶段: 每个 block 内部计算最大值
+        reduce_max_velocity_sq_kernel_part1<<<data->block_num, data->thread_num>>>(data->vel, d_partial_max_sq, data->particle_num);
+
+        // 第二阶段: 从各 block 的结果中找到全局最大值
+        reduce_max_velocity_sq_kernel_part2<<<1, 1>>>(d_partial_max_sq, d_max_vel_sq_out, data->block_num);
+
+        cudaFree(d_partial_max_sq);
+    }
 }
 
 namespace VT_Physics::pbf { // host invoke api

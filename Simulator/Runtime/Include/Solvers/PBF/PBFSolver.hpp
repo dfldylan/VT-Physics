@@ -116,6 +116,12 @@ namespace VT_Physics::pbf {
         std::vector<float3> m_host_vel;
         std::vector<int> m_host_mat;
         std::vector<float3> m_host_color;
+
+        bool m_enableCFL{false}; // 添加一个开关来控制是否启用CFL
+        float* m_d_max_vel_sq{nullptr}; // 用于在设备端存储最大速度平方
+        float m_cfl_number{0.4f}; // CFL 安全系数
+        float m_min_dt{0.0001f}; // 最小时间步，防止除以零或dt过小
+        float m_max_dt{0.04f}; // 最大时间步，例如对应60FPS
     };
 }
 

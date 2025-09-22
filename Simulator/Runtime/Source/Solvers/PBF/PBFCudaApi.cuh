@@ -54,6 +54,13 @@ namespace VT_Physics::pbf {
                  UGNS::UniformGirdNeighborSearcherConfig *d_nsConfig,
                  UGNS::UniformGirdNeighborSearcherParams *d_nsParams);
 
+    /**
+     * @brief 在 GPU 上计算所有粒子速度平方的最大值
+     * @param data PBF 求解器的设备端数据指针
+     * @param max_vel_sq_out 输出参数，用于存放计算出的最大速度平方
+     */
+    void compute_max_velocity_sq(Data* data, float* max_vel_sq_out);
+
 }
 
 #endif //VT_PHYSICS_PBFCUDAAPI_CUH
