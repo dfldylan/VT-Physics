@@ -8,6 +8,8 @@
 #include "JSON/JSONHandler.hpp"
 #include "PBFCudaApi.cuh"
 
+// 声明新的API函数
+void update_rigid_body_positions(VT_Physics::pbf::Data* d_data, VT_Physics::pbf::RigidObjectData* d_rigid_data, int num_rigid_objects);
 void compute_max_velocity_sq(VT_Physics::pbf::Data* data, float* max_vel_sq_out);
 
 namespace VT_Physics::pbf {
@@ -228,6 +230,21 @@ namespace VT_Physics::pbf {
 
         m_configData["EXPORT"]["SolverRequired"]["exportObjectEndIndex"].push_back(m_host_pos.size());
         m_attached_objs.push_back(obj);
+
+        // 如果是刚体，则为其创建并存储局部坐标信息
+        if (obj->getObjectComponentConfig()["epmMaterial"].get<int>() == EPM_BOUNDARY) {
+            RigidObjectData rod;
+            rod.start_idx = m_configData["EXPORT"]["SolverRequired"]["exportObjectStartIndex"].back().get<int>();
+            rod.particle_count = part_num;
+            
+            // 分配并拷贝局部坐标到GPU
+            cudaMalloc(&rod.d_local_pos, part_num * sizeof(float3));
+            cudaMemcpy(rod.d_local_pos, pos_f3ptr, part_num * sizeof(float3), cudaMemcpyHostToDevice);
+            
+            // 添加到刚体列表中
+            m_rigid_objects.push_back(rod);
+        }
+
         return true;
     }
 
@@ -254,6 +271,14 @@ namespace VT_Physics::pbf {
             cudaFree(m_d_max_vel_sq);
             m_d_max_vel_sq = nullptr;
         }
+        // 释放刚体相关的GPU内存
+        for (auto& rod : m_rigid_objects) {
+            if (rod.d_local_pos) {
+                cudaFree(rod.d_local_pos);
+                rod.d_local_pos = nullptr;
+            }
+        }
+        m_rigid_objects.clear();
         m_attached_objs.clear();
         m_neighborSearcher.freeMemory();
 
@@ -346,6 +371,21 @@ namespace VT_Physics::pbf {
         // keep json consistent for potential users
         m_configData["PBF"]["Required"]["timeStep"] = dt;
     }
+    
+    void PBFSolver::applyRigidBodyTransform(int start_idx, int end_idx, const float q[4], const float t[3]) {
+        // 移除 m_isInitialized 检查，允许在任何时候更新变换状态
+        // if (!m_isInitialized) return;
+
+        // 查找对应的刚体对象并更新其变换状态
+        for (auto& rod : m_rigid_objects) {
+            if (rod.start_idx == start_idx && (rod.start_idx + rod.particle_count) == end_idx) {
+                // q from python is [w, x, y, z]. C++ float4 is (x, y, z, w)
+                rod.current_q = make_float4(q[1], q[2], q[3], q[0]);
+                rod.current_t = make_float3(t[0], t[1], t[2]);
+                break; // 找到并更新后即可退出
+            }
+        }
+    }
 
     bool PBFSolver::tick() {
         // 如果启用了CFL，在tick开始时动态计算并更新dt
@@ -368,6 +408,17 @@ namespace VT_Physics::pbf {
             new_dt = std::max(m_min_dt, std::min(m_max_dt, new_dt));
             setTimeStep(new_dt);
             LOG_INFO("PBFSolver adjusted dt to: " + std::to_string(new_dt) + " based on CFL condition.");
+        }
+
+        // 在所有物理计算之前，根据最新的transform更新刚体粒子位置
+        if (!m_rigid_objects.empty()) {
+            RigidObjectData* d_rigid_data;
+            cudaMalloc(&d_rigid_data, m_rigid_objects.size() * sizeof(RigidObjectData));
+            cudaMemcpy(d_rigid_data, m_rigid_objects.data(), m_rigid_objects.size() * sizeof(RigidObjectData), cudaMemcpyHostToDevice);
+            
+            update_rigid_body_positions(m_device_data, d_rigid_data, m_rigid_objects.size());
+
+            cudaFree(d_rigid_data);
         }
 
         static const float export_gap = 1 / m_configData["EXPORT"]["SolverRequired"]["exportFps"].get<float>();

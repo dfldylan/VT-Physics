@@ -54,6 +54,9 @@ namespace VT_Physics::pbf {
                  UGNS::UniformGirdNeighborSearcherConfig *d_nsConfig,
                  UGNS::UniformGirdNeighborSearcherParams *d_nsParams);
 
+    __host__ void
+    update_rigid_body_positions(Data *d_data, RigidObjectData* d_rigid_data, int num_rigid_objects);
+
     /**
      * @brief 在 GPU 上计算所有粒子速度平方的最大值
      * @param data PBF 求解器的设备端数据指针

@@ -43,7 +43,7 @@ using namespace VT_Physics;
 //   1 Reset: payload { float particleRadius }
 //   2 Add Fluid cloud: payload { int32 id, int32 N, float pos[N*3], float vel[N*3] }
 //   3 Add Solid cloud: payload { int32 id, int32 B, float pos[B*3], float normal[B*3] }  // not simulated yet
-//   4 Next frame: payload { float dt } -> response: { int32 ok, int32 objCount, [int32 id, int32 N, float pos[N*3], float vel[N*3]]* }
+//   4 Next frame: payload { float dt, int32 num_transforms, [int32 id, float q[4], float t[3]]* } -> response: { int32 ok, int32 objCount, [int32 id, int32 N, float pos[N*3], float vel[N*3]]* }
 //   5 Clear objects: payload {}
 //   9 Shutdown
 
@@ -275,6 +275,42 @@ namespace {
 
             ensureSolver();
             float dt = 0.f; if (!recvAll(s, &dt, sizeof(dt))) return; 
+
+            // 接收 transform 数据
+            int32_t num_transforms = 0;
+            if (!recvAll(s, &num_transforms, sizeof(num_transforms))) return;
+
+            auto pbf = dynamic_cast<VT_Physics::pbf::PBFSolver*>(solver);
+            if (!pbf) { int32_t ok=0; sendAll(s,&ok,sizeof(ok)); return; }
+
+            for (int i = 0; i < num_transforms; ++i) {
+                int32_t obj_id;
+                float q[4]; // w, x, y, z
+                float t[3]; // x, y, z
+                if (!recvAll(s, &obj_id, sizeof(obj_id))) return;
+                if (!recvAll(s, &q, sizeof(q))) return;
+                if (!recvAll(s, &t, sizeof(t))) return;
+
+                // 找到对象在solver中的索引范围
+                int obj_idx = -1;
+                for(int j=0; j<attachOrder.size(); ++j) {
+                    if (attachOrder[j] == obj_id) {
+                        obj_idx = j;
+                        break;
+                    }
+                }
+
+                if (obj_idx != -1) {
+                    std::vector<int> start, end;
+                    pbf->getAttachedObjectRanges(start, end);
+                    if (obj_idx < start.size() && obj_idx < end.size()) {
+                        int sIdx = start[obj_idx];
+                        int eIdx = end[obj_idx];
+                        pbf->applyRigidBodyTransform(sIdx, eIdx, q, t);
+                    }
+                }
+            }
+
             // if (dt>0) {
             //     auto pbf = dynamic_cast<VT_Physics::pbf::PBFSolver*>(solver);
             //     if (pbf) pbf->setTimeStep(dt);
@@ -286,8 +322,6 @@ namespace {
             solver->tickNsteps(1);
 
             // Read back from PBFSolver
-            auto pbf = dynamic_cast<VT_Physics::pbf::PBFSolver*>(solver);
-            if (!pbf) { int32_t ok=0; sendAll(s,&ok,sizeof(ok)); return; }
             std::vector<float3> allPos, allVel;
             pbf->fetchAllParticles(allPos, allVel);
             std::vector<int> start, end; pbf->getAttachedObjectRanges(start, end);
@@ -332,7 +366,7 @@ namespace {
 }
 
 int main(int argc, char** argv) {
-    int port = 55001;
+    int port = 45001;
     if (argc>=2) {
         port = std::atoi(argv[1]);
         if (port<=0) port = 55001;

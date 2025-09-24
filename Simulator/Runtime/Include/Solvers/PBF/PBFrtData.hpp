@@ -14,6 +14,23 @@
 
 namespace VT_Physics::pbf {
 
+    struct RigidObjectData {
+        int start_idx;
+        int particle_count;
+        float3* d_local_pos; // 存储在GPU上的局部坐标
+        float4 current_q;    // 当前姿态 (World from Local), (x,y,z,w)
+        float3 current_t;    // 当前平移 (in World)
+
+        // 添加默认构造函数以确保正确的初始化
+        RigidObjectData() 
+            : start_idx(0), 
+              particle_count(0), 
+              d_local_pos(nullptr), 
+              current_q(make_float4(0.f, 0.f, 0.f, 1.f)), // 单位四元数 (x,y,z,w)
+              current_t(make_float3(0.f, 0.f, 0.f))       // 零平移
+        {}
+    };
+
     struct Data {
     private:
         bool is_malloced{false};

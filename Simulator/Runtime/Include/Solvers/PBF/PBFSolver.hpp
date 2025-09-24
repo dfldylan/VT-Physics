@@ -91,6 +91,7 @@ namespace VT_Physics::pbf {
         void fetchAllParticles(std::vector<float3>& outPos, std::vector<float3>& outVel);
         void getAttachedObjectRanges(std::vector<int>& start, std::vector<int>& end);
         void setTimeStep(float dt);
+        void applyRigidBodyTransform(int start_idx, int end_idx, const float q[4], const float t[3]);
 
     protected:
         virtual bool tick() override;
@@ -111,6 +112,9 @@ namespace VT_Physics::pbf {
         bool m_doExportFlag{false};
         std::vector<Object *> m_attached_objs;
         UGNS::UniformGirdNeighborSearcher m_neighborSearcher;
+
+        // 新增：用于管理刚体状态
+        std::vector<RigidObjectData> m_rigid_objects;
 
         std::vector<float3> m_host_pos;
         std::vector<float3> m_host_vel;

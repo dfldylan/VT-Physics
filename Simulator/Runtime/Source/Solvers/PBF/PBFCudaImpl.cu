@@ -193,6 +193,40 @@ namespace VT_Physics::pbf { // cuda kernels
         DATA_VALUE(dx, p_i) += dv * CONST_VALUE(dt);
     }
 
+    __device__ float3 rotate_vector_by_quaternion(const float3& v, const float4& q) {
+        float3 u = make_float3(q.x, q.y, q.z);
+        float s = q.w;
+        return 2.0f * dot(u, v) * u
+             + (s*s - dot(u, u)) * v
+             + 2.0f * s * cross(u, v);
+    }
+
+    // 新的内核：根据局部坐标和世界变换来计算粒子当前的世界坐标和速度
+    __global__ void update_rigid_body_positions_kernel(Data* d_data, RigidObjectData* rigid_obj) {
+        uint32_t i = blockIdx.x * blockDim.x + threadIdx.x;
+        if (i >= rigid_obj->particle_count) return;
+
+        int p_i = rigid_obj->start_idx + i;
+
+        // 1. 读取局部坐标
+        float3 local_pos = rigid_obj->d_local_pos[i];
+
+        // 2. 应用旋转和平移，计算新的世界坐标
+        // new_pos = R * local_pos + T
+        float3 new_pos = rotate_vector_by_quaternion(local_pos, rigid_obj->current_q) + rigid_obj->current_t;
+
+        // 3. 读取旧的世界坐标以计算速度
+        float3 old_pos = DATA_VALUE(pos, p_i);
+
+        // 4. 计算速度 v = (P_new - P_old) / dt
+        float3 vel = (new_pos - old_pos) * CONST_VALUE(inv_dt);
+
+        // 5. 更新GPU上的世界坐标和速度
+        DATA_VALUE(pos, p_i) = new_pos;
+        DATA_VALUE(vel, p_i) = vel;
+    }
+
+
     // 添加这个辅助函数
     __device__ static inline void atomicMax_f(float* address, float val) {
         int* address_as_int = (int*)address;
@@ -322,5 +356,20 @@ namespace VT_Physics::pbf { // host invoke api
         apply_dx_cuda<<<h_data->block_num, h_data->thread_num>>>(d_data,
                                                                  d_nsConfig,
                                                                  d_nsParams);
+    }
+
+    __host__ void
+    update_rigid_body_positions(Data *d_data, RigidObjectData* d_rigid_data, int num_rigid_objects) {
+        // 为每个刚体对象启动一个内核
+        for (int i = 0; i < num_rigid_objects; ++i) {
+            // 从设备端数组中获取单个对象的信息
+            RigidObjectData rigid_obj;
+            cudaMemcpy(&rigid_obj, &d_rigid_data[i], sizeof(RigidObjectData), cudaMemcpyDeviceToHost);
+
+            if (rigid_obj.particle_count > 0) {
+                unsigned int block_num = (rigid_obj.particle_count + 1024 - 1) / 1024; // 使用固定的线程数
+                update_rigid_body_positions_kernel<<<block_num, 1024>>>(d_data, &d_rigid_data[i]);
+            }
+        }
     }
 }
