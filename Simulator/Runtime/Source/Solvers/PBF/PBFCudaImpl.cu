@@ -215,6 +215,12 @@ namespace VT_Physics::pbf { // cuda kernels
         // new_pos = R * local_pos + T
         float3 new_pos = rotate_vector_by_quaternion(local_pos, rigid_obj->current_q) + rigid_obj->current_t;
 
+        // --- 坐标系转换：翻转Y轴以匹配手性 ---
+        // 这是为了修正由于数据源（可能是右手系）和模拟器（可能是左手系）之间的差异
+        // 导致的镜像问题。
+        new_pos = make_float3(new_pos.x, -new_pos.y, new_pos.z);
+
+
         // 3. 读取旧的世界坐标以计算速度
         float3 old_pos = DATA_VALUE(pos, p_i);
 
