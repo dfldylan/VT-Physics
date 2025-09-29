@@ -194,8 +194,11 @@ namespace VT_Physics::pbf { // cuda kernels
     }
 
     __device__ float3 rotate_vector_by_quaternion(const float3& v, const float4& q) {
-        float3 u = make_float3(q.x, q.y, q.z);
-        float s = q.w;
+        // 在使用前对四元数进行归一化，确保它是一个单位四元数，从而避免任何缩放效果。
+        float4 q_norm = normalize(q);
+
+        float3 u = make_float3(q_norm.x, q_norm.y, q_norm.z);
+        float s = q_norm.w;
         return 2.0f * dot(u, v) * u
              + (s*s - dot(u, u)) * v
              + 2.0f * s * cross(u, v);
