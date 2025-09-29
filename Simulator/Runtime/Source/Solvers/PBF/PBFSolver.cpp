@@ -380,7 +380,7 @@ namespace VT_Physics::pbf {
         for (auto& rod : m_rigid_objects) {
             if (rod.start_idx == start_idx && (rod.start_idx + rod.particle_count) == end_idx) {
                 // q from python is [w, x, y, z]. C++ float4 is (x, y, z, w)
-                rod.current_q = make_float4(q[1], q[2], q[3], q[0]);
+                rod.current_q = make_float4(q[0], q[1], q[2], q[3]);
                 rod.current_t = make_float3(t[0], t[1], t[2]);
                 break; // 找到并更新后即可退出
             }
