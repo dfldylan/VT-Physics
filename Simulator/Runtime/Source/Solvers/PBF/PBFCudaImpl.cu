@@ -194,14 +194,16 @@ namespace VT_Physics::pbf { // cuda kernels
     }
 
     __device__ float3 rotate_vector_by_quaternion(const float3& v, const float4& q) {
-        // 在使用前对四元数进行归一化，确保它是一个单位四元数，从而避免任何缩放效果。
+        // q = (x,y,z,w)
         float4 q_norm = normalize(q);
-
         float3 u = make_float3(q_norm.x, q_norm.y, q_norm.z);
         float s = q_norm.w;
+
+        // 右手系:  + 2*s*cross(u,v)
+        // 左手系:  - 2*s*cross(u,v)   <- 使用左手系以和你的数据/客户端一致
         return 2.0f * dot(u, v) * u
              + (s*s - dot(u, u)) * v
-             + 2.0f * s * cross(u, v);
+             - 2.0f * s * cross(u, v);  // 改这里的符号
     }
 
     // 新的内核：根据局部坐标和世界变换来计算粒子当前的世界坐标和速度
