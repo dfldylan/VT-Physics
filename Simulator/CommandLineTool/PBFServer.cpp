@@ -285,7 +285,7 @@ namespace {
 
             for (int i = 0; i < num_transforms; ++i) {
                 int32_t obj_id;
-                float q[4]; // w, x, y, z
+                float q[4]; // x, y, z, w
                 float t[3]; // x, y, z
                 if (!recvAll(s, &obj_id, sizeof(obj_id))) return;
                 if (!recvAll(s, &q, sizeof(q))) return;
