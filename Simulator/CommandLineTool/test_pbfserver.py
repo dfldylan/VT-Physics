@@ -90,11 +90,25 @@ class PBFClient:
         print(f"Add Solid response: {'OK' if ok else 'Failed'}")
         return ok == 1
 
-    def next_frame(self, dt: float):
+    def next_frame(self, dt: float, transform: dict):
         """Sends a Next Frame command (type 4) and receives particle data."""
-        # print(f"Requesting next frame with dt={dt}")
-        msg = struct.pack('<if', 4, dt)
-        self._send_all(msg)
+
+        # [type, dt, num_transforms, [obj_id, qx, qy, qz, qw, tx, ty, tz]*]
+        msg_parts = [struct.pack('<if', 4, dt)]
+        # if transform:
+        num_transforms = len(transform)
+        msg_parts.append(struct.pack('<i', num_transforms))
+        for obj_id_str, trans_data in transform.items():
+            obj_id = int(obj_id_str)
+            # 注意: q_C2W 是 [w, x, y, z], t_C2W 是 [x, y, z]
+            q = trans_data['q_C2W']  # [w, x, y, z]
+            t = trans_data['t_C2W']  # [x, y, z]
+            # C++侧期望的四元数顺序是 [x, y, z, w]
+            msg_parts.append(struct.pack('<iffff fff', obj_id, q[1], q[2], q[3], q[0], t[0], t[1], t[2]))
+        # else:
+        #     msg_parts.append(struct.pack('<i', 0))  # num_transforms = 0
+
+        self._send_all(b''.join(msg_parts))
 
         # Response header
         ok, obj_count = struct.unpack('<ii', self._recv_all(8))
@@ -154,6 +168,70 @@ def create_solid_plane(center, size, particle_dist):
     normals = np.zeros_like(positions)
     normals[:, 1] = 1.0  # Normals point up (Y-axis)
     return positions, normals
+
+
+# create solid box without top face
+def create_solid_box(center, size, particle_dist):
+    """Creates a solid box (without top face) as a point cloud."""
+    x = np.arange(-size / 2, size / 2 + particle_dist, particle_dist)
+    y = np.arange(0, size / 2 + particle_dist, particle_dist)
+    z = np.arange(-size / 2, size / 2 + particle_dist, particle_dist)
+
+    # Create faces (without top face)
+    faces = []
+    # Bottom face
+    xx, zz = np.meshgrid(x, z)
+    yy = np.full_like(xx, 0)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+    # double layer for bottom face
+    yy = np.full_like(xx, particle_dist)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+
+    # Front face
+    xx, yy = np.meshgrid(x, y)
+    zz = np.full_like(xx, -size / 2)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+
+    # Back face
+    xx, yy = np.meshgrid(x, y)
+    zz = np.full_like(xx, size / 2)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+
+    # Left face
+    yy, zz = np.meshgrid(y, z)
+    xx = np.full_like(yy, -size / 2)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+
+    # Right face
+    yy, zz = np.meshgrid(y, z)
+    xx = np.full_like(yy, size / 2)
+    faces.append(np.vstack([xx.ravel(), yy.ravel(), zz.ravel()]).T)
+
+    positions = np.vstack(faces) + center
+
+    # Normals for each face
+    normals = []
+    # Bottom face normals
+    n_bottom = np.array([0, -1, 0])
+    normals.append(np.tile(n_bottom, (faces[0].shape[0], 1)))
+    normals.append(np.tile(n_bottom, (faces[1].shape[0], 1)))  # double layer
+
+    # Front face normals
+    n_front = np.array([0, 0, -1])
+    normals.append(np.tile(n_front, (faces[2].shape[0], 1)))
+
+    # Back face normals
+    n_back = np.array([0, 0, 1])
+    normals.append(np.tile(n_back, (faces[3].shape[0], 1)))
+    # Left face normals
+    n_left = np.array([-1, 0, 0])
+    normals.append(np.tile(n_left, (faces[4].shape[0], 1)))
+    # Right face normals
+    n_right = np.array([1, 0, 0])
+    normals.append(np.tile(n_right, (faces[5].shape[0], 1)))
+    normals = np.vstack(normals)
+    return positions, normals
+
 
 def save_ply(filepath, positions):
     """Saves a point cloud to a .ply file."""
