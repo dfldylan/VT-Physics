@@ -90,23 +90,23 @@ class PBFClient:
         print(f"Add Solid response: {'OK' if ok else 'Failed'}")
         return ok == 1
 
-    def next_frame(self, dt: float, transform: dict):
+    def next_frame(self, dt: float, transform: dict=None):
         """Sends a Next Frame command (type 4) and receives particle data."""
 
         # [type, dt, num_transforms, [obj_id, qx, qy, qz, qw, tx, ty, tz]*]
         msg_parts = [struct.pack('<if', 4, dt)]
-        # if transform:
-        num_transforms = len(transform)
-        msg_parts.append(struct.pack('<i', num_transforms))
-        for obj_id_str, trans_data in transform.items():
-            obj_id = int(obj_id_str)
-            # 注意: q_C2W 是 [w, x, y, z], t_C2W 是 [x, y, z]
-            q = trans_data['q_C2W']  # [w, x, y, z]
-            t = trans_data['t_C2W']  # [x, y, z]
-            # C++侧期望的四元数顺序是 [x, y, z, w]
-            msg_parts.append(struct.pack('<iffff fff', obj_id, q[1], q[2], q[3], q[0], t[0], t[1], t[2]))
-        # else:
-        #     msg_parts.append(struct.pack('<i', 0))  # num_transforms = 0
+        if transform:
+            num_transforms = len(transform)
+            msg_parts.append(struct.pack('<i', num_transforms))
+            for obj_id_str, trans_data in transform.items():
+                obj_id = int(obj_id_str)
+                # 注意: q_C2W 是 [w, x, y, z], t_C2W 是 [x, y, z]
+                q = trans_data['q_C2W']  # [w, x, y, z]
+                t = trans_data['t_C2W']  # [x, y, z]
+                # C++侧期望的四元数顺序是 [x, y, z, w]
+                msg_parts.append(struct.pack('<iffff fff', obj_id, q[1], q[2], q[3], q[0], t[0], t[1], t[2]))
+        else:
+            msg_parts.append(struct.pack('<i', 0))  # num_transforms = 0
 
         self._send_all(b''.join(msg_parts))
 
@@ -247,18 +247,46 @@ end_header
         f.write(header)
         np.savetxt(f, positions, fmt='%.6f')
 
+
+def read_ply(filepath):
+    """Reads a point cloud from a .ply file."""
+    with open(filepath, 'r') as f:
+        lines = f.readlines()
+
+    # Find the end of the header
+    end_header_idx = lines.index('end_header\n') + 1
+    data_lines = lines[end_header_idx:]
+
+    positions = []
+    for line in data_lines:
+        x, y, z = map(float, line.strip().split())
+        positions.append([x, y, z])
+    return np.array(positions)
+
+def read_npz(filepath):
+    """Reads particle data from a .npz file."""
+    data = np.load(filepath, allow_pickle=True)
+    positions = data['pos']
+    return positions
+
 def main():
     # --- Configuration ---
-    SERVER_HOST = '222.199.197.89'
-    SERVER_PORT = 31364 # 确保这个端口和你的服务器配置一致
-    PARTICLE_RADIUS = 0.05
+    SERVER_HOST = '127.0.0.1'
+    SERVER_PORT = 6009 # 确保这个端口和你的服务器配置一致
+    PARTICLE_RADIUS = 0.03
     PARTICLE_DISTANCE = PARTICLE_RADIUS * 2.0
     
     SIMULATION_STEPS = 200
     TIME_STEP = 0.016
 
-    OUTPUT_DIR = "simulation_output"
+    bg_bias = np.array([0,1 ,0])
+    center = np.array([0.0, 5.0, 10.0])
+
+    OUTPUT_DIR = r"D:\workspace\Constrain-Based-Cconv\simulation_output"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    fluid_path = r'D:\workspace\Constrain-Based-Cconv/fluid_0000.ply'
+    solid_path = r'D:\workspace\Constrain-Based-Cconv/lava_bg_points.ply'
 
     # --- Create Client and Connect ---
     client = PBFClient(host=SERVER_HOST,port=SERVER_PORT)
@@ -270,13 +298,26 @@ def main():
         client.reset(particle_radius=PARTICLE_RADIUS)
 
         # 2. Create and add objects
-        fluid_pos, fluid_vel = create_fluid_cube(center=np.array([0, 2, 0]), size=2.0, particle_dist=PARTICLE_DISTANCE)
-        client.add_fluid(obj_id=101, positions=fluid_pos, velocities=fluid_vel)
+        fluid_pos = read_ply(fluid_path)
+        ply_path = os.path.join(OUTPUT_DIR, f"fluid_{(0):04d}.ply")
+        save_ply(ply_path, fluid_pos)
+        fluid_pos = fluid_pos - center[None,:]
+        fluid_pos[:,1] = -fluid_pos[:,1]  # Invert Y axis if needed
+        fluid_vel = np.zeros_like(fluid_pos)
+        client.add_fluid(obj_id=1, positions=fluid_pos, velocities=fluid_vel)
 
-        solid_pos, solid_nrm = create_solid_plane(center=np.array([0, -1, 0]), size=8.0, particle_dist=PARTICLE_DISTANCE)
-        client.add_solid(obj_id=201, positions=solid_pos, normals=solid_nrm)
+        solid_pos = read_ply(solid_path)
+        solid_pos = solid_pos+bg_bias
+        save_ply(os.path.join(OUTPUT_DIR, "solid_0000.ply"), solid_pos)
+
+        solid_pos = solid_pos - center[None,:]
+        solid_pos[:,1] = -solid_pos[:,1]  # Invert Y axis if needed
+        # crop [-10,10] in all axes
+        mask = np.all((solid_pos >= -10) & (solid_pos <= 10), axis=1)
+        solid_pos = solid_pos[mask]
+        solid_nrm = np.zeros_like(solid_pos)
+        client.add_solid(obj_id=0, positions=solid_pos, normals=solid_nrm)
         # Save solid object once
-        save_ply(os.path.join(OUTPUT_DIR, "solid_plane.ply"), solid_pos)
 
         # 3. Run simulation loop
         print("\n--- Starting simulation loop ---")
@@ -292,9 +333,18 @@ def main():
             # Save received data to .ply files
             for obj_id, data in objects_data.items():
                 # We only care about visualizing the fluid particles
-                if obj_id == 101:
-                    ply_path = os.path.join(OUTPUT_DIR, f"fluid_frame_{i:04d}.ply")
-                    save_ply(ply_path, data['pos'])
+                if obj_id == 1:
+                    ply_path = os.path.join(OUTPUT_DIR, f"fluid_{(i+1):04d}.ply")
+                    pos = np.array(data['pos'])
+                    pos[:,1] = -pos[:,1]  # Invert Y axis back if needed
+                    pos = pos + center[None,:]
+                    save_ply(ply_path, pos)
+                if obj_id == 0:
+                    ply_path = os.path.join(OUTPUT_DIR, f"solid_{(i+1):04d}.ply")
+                    pos = np.array(data['pos'])
+                    pos[:,1] = -pos[:,1]  # Invert Y axis back if needed
+                    pos = pos + center[None,:]
+                    save_ply(ply_path, pos)
         
         print(f"--- Simulation finished. Output saved to '{OUTPUT_DIR}' directory. ---")
 
